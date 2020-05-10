@@ -30,6 +30,10 @@ import java.lang.IllegalStateException
 
 private val creationMethods = setOf("create", "create2")
 
+private val actionCallTypesToIgnore = setOf("delegatecall", "staticcall")
+
+private val actionCallTypesToProcess = setOf("call", "callcode")
+
 fun FlatTrace.toContractCreated(programCounter: Int): ContractCreated {
     require(type == "create" && creationMethods.contains(action.creationMethod))
 
@@ -60,7 +64,7 @@ fun FlatTrace.toContractDestroyed(programCounter: Int): ContractDestroyed {
 }
 
 fun FlatTrace.toInternalTransaction(programCounter: Int): InternalTransaction? {
-    require(type == "call" && action.callType == "call")
+    require(type == "call" && actionCallTypesToProcess.contains(action.callType))
 
     val value = Wei.fromHexString(action.value)
 
@@ -112,17 +116,15 @@ class TransactionTraceParser(
             return
         }
 
+        val action = trace.action
+
         when {
 
-            trace.type == "call" && trace.action.callType == "call" && traceAddress.isEmpty() -> {
+            traceAddress.isEmpty() && trace.type == "call" && action.callType == "call" -> {
                 // ignore as this is a normal transaction
             }
 
-            trace.type == "call" && trace.action.callType == "delegatecall" -> {
-                // ignore
-            }
-
-            trace.type == "call" && trace.action.callType == "call" && traceAddress.isNotEmpty() ->
+            trace.type == "call" && actionCallTypesToProcess.contains(action.callType) && traceAddress.isNotEmpty() ->
                 trace.toInternalTransaction(programCounter)
                     ?.apply {
                         internalTransactions.add(this)
@@ -130,7 +132,11 @@ class TransactionTraceParser(
                         touchedAccounts.add(this.toAddress)
                     }
 
-            trace.type == "create" && creationMethods.contains(trace.action.creationMethod) ->
+            trace.type == "call" && actionCallTypesToIgnore.contains(action.callType) -> {
+                // ignore
+            }
+
+            trace.type == "create" && creationMethods.contains(action.creationMethod) ->
                 trace.toContractCreated(programCounter)
                     .apply {
 
