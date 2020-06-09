@@ -6,7 +6,7 @@ COPY ./ /build
 
 RUN ./gradlew :plugin:build
 
-FROM hyperledger/besu:1.4.4
+FROM hyperledger/besu:1.4.5
 
 RUN mkdir -p /opt/besu/plugins
 
